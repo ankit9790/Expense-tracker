@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 
 import GaugeCard from "../components/GaugeCard";
-import FinancialCard from "../components/Financialcard";
+import FinancialCard from "../components/FinancialCard";
 import TimeFrameSelector from "../components/TimeFrame";
 import AddTransactionModal from "../components/Add";
 
