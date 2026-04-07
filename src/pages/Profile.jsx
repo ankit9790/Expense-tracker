@@ -1,382 +1,690 @@
 import React, { useState, useCallback, memo } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useStore } from "../store/useStore";
+import { getStats } from "../utils/helpers";
 import {
-  User,
-  Mail,
-  Calendar,
-  Lock,
   Eye,
   EyeOff,
   Edit2,
+  Lock,
+  User,
+  Mail,
+  Calendar,
   X,
 } from "lucide-react";
-import { profileStyles } from "../assets/dummyStyles";
 
-// ── Password input (memoised) ──────────────────────────────────────
-const PasswordInput = memo(
-  ({ name, label, value, error, showField, onToggle, onChange, disabled }) => (
-    <div>
-      <label className={profileStyles.passwordLabel}>{label}</label>
-      <div className={profileStyles.passwordContainer}>
+const MOCK_USER = {
+  name: "Dev",
+  email: "dev@financepro.app",
+  joinDate: "2024-01-15",
+};
+const USER_KEY = "financepro_user";
+
+function loadUser() {
+  try {
+    const r = localStorage.getItem(USER_KEY);
+    if (r) return JSON.parse(r);
+  } catch (_) {}
+  return MOCK_USER;
+}
+
+const PasswordField = memo(
+  ({ name, label, value, error, show, onToggle, onChange, disabled }) => (
+    <div style={{ marginBottom: 14 }}>
+      <label
+        style={{
+          fontSize: 12,
+          color: "var(--text2)",
+          display: "block",
+          marginBottom: 5,
+        }}
+      >
+        {label}
+      </label>
+      <div style={{ position: "relative" }}>
         <input
-          type={showField ? "text" : "password"}
+          type={show ? "text" : "password"}
           name={name}
           value={value}
           onChange={onChange}
-          className={`${profileStyles.inputWithError} ${error ? "border-red-300" : "border-gray-200"}`}
-          placeholder={`Enter ${label.toLowerCase()}`}
           disabled={disabled}
+          placeholder={`Enter ${label.toLowerCase()}`}
+          style={{
+            width: "100%",
+            background: "var(--bg3)",
+            border: `1px solid ${error ? "var(--red)" : "var(--border)"}`,
+            color: "var(--text)",
+            padding: "9px 36px 9px 12px",
+            borderRadius: 8,
+            fontSize: 13,
+            outline: "none",
+          }}
         />
         <button
           type="button"
           onClick={onToggle}
-          className={profileStyles.passwordToggle}
           disabled={disabled}
+          style={{
+            position: "absolute",
+            right: 10,
+            top: "50%",
+            transform: "translateY(-50%)",
+            background: "none",
+            border: "none",
+            color: "var(--text3)",
+            cursor: "pointer",
+            display: "flex",
+            padding: 0,
+          }}
         >
-          {showField ? (
-            <EyeOff className="w-5 h-5" />
-          ) : (
-            <Eye className="w-5 h-5" />
-          )}
+          {show ? <EyeOff size={15} /> : <Eye size={15} />}
         </button>
       </div>
-      {error && <p className={profileStyles.errorText}>{error}</p>}
+      {error && (
+        <p style={{ fontSize: 11, color: "var(--red)", marginTop: 4 }}>
+          {error}
+        </p>
+      )}
     </div>
   ),
 );
-PasswordInput.displayName = "PasswordInput";
+PasswordField.displayName = "PasswordField";
 
-// ─────────────────────────────────────────────────────────────────
-const ProfilePage = () => {
-  const { user, setUser, allTransactions = [] } = useOutletContext();
-
+export default function Profile() {
+  const { transactions, role, setRole } = useStore();
+  const [user, setUserState] = useState(loadUser);
   const [editMode, setEditMode] = useState(false);
   const [tempUser, setTempUser] = useState({ ...user });
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showPwModal, setShowPwModal] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const [passwordData, setPasswordData] = useState({
-    current: "",
-    new: "",
-    confirm: "",
-  });
-  const [showPassword, setShowPassword] = useState({
+  const [pwData, setPwData] = useState({ current: "", new: "", confirm: "" });
+  const [showPw, setShowPw] = useState({
     current: false,
     new: false,
     confirm: false,
   });
-  const [passwordErrors, setPasswordErrors] = useState({});
-  const [loading, setLoading] = useState(false);
+  const [pwErrors, setPwErrors] = useState({});
 
-  // Stats
-  const totalIncome = allTransactions
-    .filter((t) => t.type === "income")
-    .reduce((s, t) => s + Number(t.amount), 0);
-  const totalExpense = allTransactions
-    .filter((t) => t.type === "expense")
-    .reduce((s, t) => s + Number(t.amount), 0);
-  const totalTx = allTransactions.length;
+  const stats = getStats(transactions);
 
-  const handleInputChange = useCallback((e) => {
-    const { name, value } = e.target;
-    setTempUser((p) => ({ ...p, [name]: value }));
-  }, []);
+  const saveUser = (u) => {
+    setUserState(u);
+    localStorage.setItem(USER_KEY, JSON.stringify(u));
+  };
 
   const handleSaveProfile = () => {
     if (!tempUser.name?.trim() || !tempUser.email?.trim()) {
-      alert("Name and email are required.");
+      setSaveMsg("error:Name and email are required.");
       return;
     }
-    setUser(tempUser);
+    saveUser(tempUser);
     setEditMode(false);
-    setSaveMsg("Profile updated!");
+    setSaveMsg("success:Profile updated successfully!");
     setTimeout(() => setSaveMsg(""), 3000);
   };
 
-  const handlePasswordChange = useCallback((e) => {
+  const handlePwChange = useCallback((e) => {
     const { name, value } = e.target;
-    setPasswordData((p) => ({ ...p, [name]: value }));
-    setPasswordErrors((p) => ({ ...p, [name]: "" }));
+    setPwData((p) => ({ ...p, [name]: value }));
+    setPwErrors((p) => ({ ...p, [name]: "" }));
   }, []);
 
-  const togglePasswordVisibility = useCallback((field) => {
-    setShowPassword((p) => ({ ...p, [field]: !p[field] }));
-  }, []);
-
-  const validatePassword = () => {
-    const errors = {};
-    if (!passwordData.current) errors.current = "Current password is required";
-    if (!passwordData.new) errors.new = "New password is required";
-    else if (passwordData.new.length < 8)
-      errors.new = "Password must be at least 8 characters";
-    if (passwordData.new !== passwordData.confirm)
-      errors.confirm = "Passwords do not match";
-    setPasswordErrors(errors);
-    return Object.keys(errors).length === 0;
+  const validatePw = () => {
+    const err = {};
+    if (!pwData.current) err.current = "Current password is required";
+    if (!pwData.new) err.new = "New password is required";
+    else if (pwData.new.length < 8) err.new = "Minimum 8 characters";
+    if (pwData.new !== pwData.confirm) err.confirm = "Passwords do not match";
+    setPwErrors(err);
+    return Object.keys(err).length === 0;
   };
 
-  const handlePasswordSubmit = (e) => {
+  const handlePwSubmit = (e) => {
     e.preventDefault();
-    if (!validatePassword()) return;
+    if (!validatePw()) return;
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
-      setShowPasswordModal(false);
-      setPasswordData({ current: "", new: "", confirm: "" });
-      setSaveMsg("Password updated!");
+      setShowPwModal(false);
+      setPwData({ current: "", new: "", confirm: "" });
+      setSaveMsg("success:Password updated successfully!");
       setTimeout(() => setSaveMsg(""), 3000);
-    }, 800);
+    }, 700);
   };
 
-  const initials = (user?.name || "U")
+  const initials = (user.name || "U")
     .split(" ")
     .map((n) => n[0])
     .join("")
     .toUpperCase()
     .slice(0, 2);
+  const [msgType, msgText] = saveMsg.includes(":")
+    ? saveMsg.split(":")
+    : ["", saveMsg];
+
+  const inpSt = {
+    width: "100%",
+    background: "var(--bg3)",
+    border: "1px solid var(--border)",
+    color: "var(--text)",
+    padding: "9px 12px",
+    borderRadius: 8,
+    fontSize: 13,
+    outline: "none",
+  };
+  const labelSt = {
+    fontSize: 12,
+    color: "var(--text2)",
+    display: "block",
+    marginBottom: 5,
+  };
 
   return (
-    <div className={profileStyles.container}>
-      <div className={profileStyles.mainContainer}>
-        {/* Header */}
-        <div className={profileStyles.header}>
-          <div className={profileStyles.avatar}>
-            <span className="text-3xl font-bold text-white">{initials}</span>
-          </div>
-          <h2 className={profileStyles.userName}>{user?.name}</h2>
-          <p className={profileStyles.userEmail}>{user?.email}</p>
+    <div style={{ maxWidth: 860, margin: "0 auto" }}>
+      {/* Header card */}
+      <div
+        style={{
+          background:
+            "linear-gradient(135deg, var(--teal-dim), var(--purple-dim))",
+          border: "1px solid var(--border)",
+          borderRadius: 14,
+          padding: 32,
+          textAlign: "center",
+          marginBottom: 20,
+        }}
+      >
+        <div
+          style={{
+            width: 72,
+            height: 72,
+            borderRadius: "50%",
+            background: "rgba(0,212,170,0.2)",
+            border: "2px solid var(--teal)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            margin: "0 auto 14px",
+            fontSize: 26,
+            fontWeight: 700,
+            color: "var(--teal)",
+          }}
+        >
+          {initials}
         </div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text)" }}>
+          {user.name}
+        </div>
+        <div style={{ fontSize: 13, color: "var(--text2)", marginTop: 4 }}>
+          {user.email}
+        </div>
+      </div>
 
-        {/* Content */}
-        <div className="p-8">
-          {saveMsg && (
-            <div className="mb-4 p-3 bg-teal-50 text-teal-700 rounded-lg text-sm font-medium">
-              ✓ {saveMsg}
+      {/* Save message */}
+      {saveMsg && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: "10px 16px",
+            borderRadius: 9,
+            fontSize: 13,
+            fontWeight: 500,
+            background:
+              msgType === "success" ? "var(--teal-dim)" : "var(--red-dim)",
+            border: `1px solid ${msgType === "success" ? "var(--teal)" : "var(--red)"}`,
+            color: msgType === "success" ? "var(--teal)" : "var(--red)",
+          }}
+        >
+          {msgText}
+        </div>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        {/* Personal info */}
+        <div
+          style={{
+            background: "var(--bg2)",
+            border: "1px solid var(--border)",
+            borderRadius: 14,
+            padding: 20,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 18,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                fontSize: 14,
+                fontWeight: 700,
+                color: "var(--text)",
+              }}
+            >
+              <User size={16} style={{ color: "var(--teal)" }} /> Personal
+              Information
+            </div>
+            {!editMode && (
+              <button
+                onClick={() => {
+                  setTempUser({ ...user });
+                  setEditMode(true);
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "var(--teal)",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                }}
+              >
+                <Edit2 size={13} /> Edit
+              </button>
+            )}
+          </div>
+
+          {editMode ? (
+            <div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={labelSt}>Full Name</label>
+                <input
+                  value={tempUser.name || ""}
+                  onChange={(e) =>
+                    setTempUser((p) => ({ ...p, name: e.target.value }))
+                  }
+                  style={inpSt}
+                />
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={labelSt}>Email Address</label>
+                <input
+                  type="email"
+                  value={tempUser.email || ""}
+                  onChange={(e) =>
+                    setTempUser((p) => ({ ...p, email: e.target.value }))
+                  }
+                  style={inpSt}
+                />
+              </div>
+              <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+                <button
+                  onClick={handleSaveProfile}
+                  style={{
+                    flex: 1,
+                    padding: "9px 0",
+                    background: "var(--teal)",
+                    border: "none",
+                    color: "#000",
+                    borderRadius: 8,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Save Changes
+                </button>
+                <button
+                  onClick={() => setEditMode(false)}
+                  style={{
+                    flex: 1,
+                    padding: "9px 0",
+                    background: "var(--bg3)",
+                    border: "1px solid var(--border)",
+                    color: "var(--text2)",
+                    borderRadius: 8,
+                    fontSize: 13,
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {[
+                [<User size={14} />, "Full Name", user.name],
+                [<Mail size={14} />, "Email", user.email],
+                [
+                  <Calendar size={14} />,
+                  "Member Since",
+                  user.joinDate
+                    ? new Date(user.joinDate).toLocaleDateString("en-US", {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })
+                    : "—",
+                ],
+              ].map(([icon, label, val]) => (
+                <div
+                  key={label}
+                  style={{ display: "flex", alignItems: "flex-start", gap: 10 }}
+                >
+                  <div style={{ color: "var(--text3)", marginTop: 2 }}>
+                    {icon}
+                  </div>
+                  <div>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: "var(--text3)",
+                        marginBottom: 2,
+                      }}
+                    >
+                      {label}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        color: "var(--text)",
+                        fontWeight: 500,
+                      }}
+                    >
+                      {val}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
+        </div>
 
-          <div className={profileStyles.grid}>
-            {/* Personal info */}
-            <div className={profileStyles.card}>
-              <h3 className={profileStyles.cardTitle}>
-                <User className={profileStyles.icon} /> Personal Information
-              </h3>
-
-              {editMode ? (
-                <div className="space-y-4">
-                  <div>
-                    <label className={profileStyles.label}>Full Name</label>
-                    <input
-                      type="text"
-                      name="name"
-                      value={tempUser.name || ""}
-                      onChange={handleInputChange}
-                      className={profileStyles.input}
-                    />
-                  </div>
-                  <div>
-                    <label className={profileStyles.label}>Email</label>
-                    <input
-                      type="email"
-                      name="email"
-                      value={tempUser.email || ""}
-                      onChange={handleInputChange}
-                      className={profileStyles.input}
-                    />
-                  </div>
-                  <div className="flex gap-3 pt-2">
-                    <button
-                      onClick={handleSaveProfile}
-                      className={profileStyles.buttonPrimary}
-                    >
-                      Save Changes
-                    </button>
-                    <button
-                      onClick={() => {
-                        setTempUser({ ...user });
-                        setEditMode(false);
-                      }}
-                      className={profileStyles.buttonSecondary}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <User className="w-4 h-4 text-gray-400" />
-                    <div>
-                      <p className={profileStyles.label}>Full Name</p>
-                      <p className="font-medium text-gray-800">{user?.name}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Mail className="w-4 h-4 text-gray-400" />
-                    <div>
-                      <p className={profileStyles.label}>Email</p>
-                      <p className="font-medium text-gray-800">{user?.email}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Calendar className="w-4 h-4 text-gray-400" />
-                    <div>
-                      <p className={profileStyles.label}>Member Since</p>
-                      <p className="font-medium text-gray-800">
-                        {user?.joinDate
-                          ? new Date(user.joinDate).toLocaleDateString(
-                              "en-US",
-                              {
-                                year: "numeric",
-                                month: "long",
-                                day: "numeric",
-                              },
-                            )
-                          : "—"}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setTempUser({ ...user });
-                      setEditMode(true);
-                    }}
-                    className={profileStyles.editButton}
-                  >
-                    <Edit2 className="w-4 h-4 inline mr-1" /> Edit Profile
-                  </button>
-                </div>
-              )}
+        {/* Right column */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {/* Security */}
+          <div
+            style={{
+              background: "var(--bg2)",
+              border: "1px solid var(--border)",
+              borderRadius: 14,
+              padding: 20,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                fontSize: 14,
+                fontWeight: 700,
+                color: "var(--text)",
+                marginBottom: 16,
+              }}
+            >
+              <Lock size={16} style={{ color: "var(--teal)" }} /> Security
             </div>
-
-            {/* Security & Stats */}
-            <div className="space-y-6">
-              {/* Security */}
-              <div className={profileStyles.card}>
-                <h3 className={profileStyles.cardTitle}>
-                  <Lock className={profileStyles.icon} /> Security
-                </h3>
-                <div className={profileStyles.securityItem}>
-                  <div>
-                    <p className="font-medium text-gray-800 text-sm">
-                      Password
-                    </p>
-                    <p className={profileStyles.securityText}>••••••••</p>
-                  </div>
-                  <button
-                    onClick={() => setShowPasswordModal(true)}
-                    className={profileStyles.changeButton}
-                  >
-                    Change
-                  </button>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "12px 14px",
+                background: "var(--bg3)",
+                borderRadius: 9,
+                border: "1px solid var(--border)",
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: "var(--text)",
+                  }}
+                >
+                  Password
+                </div>
+                <div
+                  style={{ fontSize: 12, color: "var(--text3)", marginTop: 2 }}
+                >
+                  ••••••••
                 </div>
               </div>
-
-              {/* Financial summary */}
-              <div className={profileStyles.card}>
-                <h3 className={profileStyles.cardTitle}>
-                  <span className="w-5 h-5 mr-2 text-teal-600">📊</span>{" "}
-                  Financial Summary
-                </h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">
-                      Total Transactions
-                    </span>
-                    <span className="font-semibold text-gray-800">
-                      {totalTx}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Total Income</span>
-                    <span className="font-semibold text-green-600">
-                      ${totalIncome.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">
-                      Total Expenses
-                    </span>
-                    <span className="font-semibold text-orange-600">
-                      ${totalExpense.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between border-t pt-2">
-                    <span className="text-sm text-gray-600">Net Savings</span>
-                    <span
-                      className={`font-bold ${totalIncome - totalExpense >= 0 ? "text-teal-600" : "text-red-500"}`}
-                    >
-                      ${(totalIncome - totalExpense).toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-              </div>
+              <button
+                onClick={() => setShowPwModal(true)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "var(--teal)",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontWeight: 500,
+                }}
+              >
+                Change
+              </button>
             </div>
+          </div>
+
+          {/* Role */}
+          <div
+            style={{
+              background: "var(--bg2)",
+              border: "1px solid var(--border)",
+              borderRadius: 14,
+              padding: 20,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 14,
+                fontWeight: 700,
+                color: "var(--text)",
+                marginBottom: 14,
+              }}
+            >
+              Current Role
+            </div>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              style={{
+                width: "100%",
+                background: "var(--bg3)",
+                border: "1px solid var(--border)",
+                color: "var(--text)",
+                padding: "9px 12px",
+                borderRadius: 8,
+                fontSize: 13,
+                cursor: "pointer",
+                marginBottom: 10,
+              }}
+            >
+              <option value="admin">Admin – Can add, edit, delete</option>
+              <option value="viewer">Viewer – Read only</option>
+            </select>
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                padding: "4px 12px",
+                borderRadius: 20,
+                fontSize: 11,
+                fontWeight: 600,
+                background:
+                  role === "admin" ? "var(--teal-dim)" : "var(--purple-dim)",
+                color: role === "admin" ? "var(--teal)" : "var(--purple)",
+              }}
+            >
+              ● {role.toUpperCase()}
+            </div>
+          </div>
+
+          {/* Financial summary */}
+          <div
+            style={{
+              background: "var(--bg2)",
+              border: "1px solid var(--border)",
+              borderRadius: 14,
+              padding: 20,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 14,
+                fontWeight: 700,
+                color: "var(--text)",
+                marginBottom: 14,
+              }}
+            >
+              📊 Financial Summary
+            </div>
+            {[
+              ["Total Transactions", stats.count, "var(--text)"],
+              [
+                "Total Income",
+                "$" + stats.income.toLocaleString(),
+                "var(--teal)",
+              ],
+              [
+                "Total Expenses",
+                "$" + stats.expense.toLocaleString(),
+                "var(--orange)",
+              ],
+              [
+                "Net Savings",
+                "$" + (stats.income - stats.expense).toLocaleString(),
+                stats.income - stats.expense >= 0
+                  ? "var(--teal)"
+                  : "var(--red)",
+              ],
+            ].map(([label, val, color], i) => (
+              <div
+                key={label}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  padding: "8px 0",
+                  borderBottom: i < 3 ? "1px solid var(--border)" : "none",
+                }}
+              >
+                <span style={{ fontSize: 13, color: "var(--text2)" }}>
+                  {label}
+                </span>
+                <span style={{ fontSize: 13, fontWeight: 600, color }}>
+                  {val}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* ── Change Password Modal ── */}
-      {showPasswordModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className={profileStyles.modalContent}>
-            <div className={profileStyles.modalHeader}>
-              <h3 className={profileStyles.modalTitle}>Change Password</h3>
-              <button
-                onClick={() => setShowPasswordModal(false)}
-                className="text-gray-500 hover:text-gray-800"
-                disabled={loading}
+      {/* Change password modal */}
+      {showPwModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,.65)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 50,
+            padding: 16,
+          }}
+        >
+          <div
+            style={{
+              background: "var(--bg2)",
+              border: "1px solid var(--border2)",
+              borderRadius: 16,
+              padding: 24,
+              width: "100%",
+              maxWidth: 400,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 20,
+              }}
+            >
+              <h3
+                style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}
               >
-                <X className="w-6 h-6" />
+                Change Password
+              </h3>
+              <button
+                onClick={() => setShowPwModal(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "var(--text2)",
+                  cursor: "pointer",
+                }}
+              >
+                <X size={18} />
               </button>
             </div>
-
-            <form onSubmit={handlePasswordSubmit} className="space-y-4">
-              <PasswordInput
-                name="current"
-                label="Current Password"
-                value={passwordData.current}
-                error={passwordErrors.current}
-                showField={showPassword.current}
-                onToggle={() => togglePasswordVisibility("current")}
-                onChange={handlePasswordChange}
-                disabled={loading}
-              />
-              <PasswordInput
-                name="new"
-                label="New Password"
-                value={passwordData.new}
-                error={passwordErrors.new}
-                showField={showPassword.new}
-                onToggle={() => togglePasswordVisibility("new")}
-                onChange={handlePasswordChange}
-                disabled={loading}
-              />
-              <PasswordInput
-                name="confirm"
-                label="Confirm New Password"
-                value={passwordData.confirm}
-                error={passwordErrors.confirm}
-                showField={showPassword.confirm}
-                onToggle={() => togglePasswordVisibility("confirm")}
-                onChange={handlePasswordChange}
-                disabled={loading}
-              />
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="submit"
-                  className={profileStyles.buttonPrimary}
+            <form onSubmit={handlePwSubmit}>
+              {[
+                ["current", "Current Password"],
+                ["new", "New Password"],
+                ["confirm", "Confirm New Password"],
+              ].map(([name, label]) => (
+                <PasswordField
+                  key={name}
+                  name={name}
+                  label={label}
+                  value={pwData[name]}
+                  error={pwErrors[name]}
+                  show={showPw[name]}
                   disabled={loading}
-                >
-                  {loading ? "Updating…" : "Update Password"}
-                </button>
+                  onToggle={() =>
+                    setShowPw((p) => ({ ...p, [name]: !p[name] }))
+                  }
+                  onChange={handlePwChange}
+                />
+              ))}
+              <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
                 <button
                   type="button"
-                  onClick={() => setShowPasswordModal(false)}
-                  className={profileStyles.buttonSecondary}
+                  onClick={() => setShowPwModal(false)}
                   disabled={loading}
+                  style={{
+                    flex: 1,
+                    padding: "10px 0",
+                    background: "var(--bg3)",
+                    border: "1px solid var(--border)",
+                    color: "var(--text2)",
+                    borderRadius: 8,
+                    fontSize: 13,
+                    cursor: "pointer",
+                  }}
                 >
                   Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  style={{
+                    flex: 1,
+                    padding: "10px 0",
+                    background: "var(--teal)",
+                    border: "none",
+                    color: "#000",
+                    borderRadius: 8,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  {loading ? "Updating…" : "Update Password"}
                 </button>
               </div>
             </form>
@@ -385,6 +693,4 @@ const ProfilePage = () => {
       )}
     </div>
   );
-};
-
-export default ProfilePage;
+}

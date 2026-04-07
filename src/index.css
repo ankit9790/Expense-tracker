@@ -2,60 +2,120 @@
 @tailwind components;
 @tailwind utilities;
 
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
+:root {
+  --bg: #0f1117;
+  --bg2: #161b27;
+  --bg3: #1e2535;
+  --bg4: #252d40;
+  --border: #2a3350;
+  --border2: #3a4560;
+  --text: #e8eaf0;
+  --text2: #8b95b0;
+  --text3: #5a6380;
+  --teal: #00d4aa;
+  --teal2: #00a882;
+  --teal-dim: #0d3d30;
+  --orange: #ff7043;
+  --orange-dim: #3d1a0d;
+  --purple: #7c6fe0;
+  --purple-dim: #1e1a40;
+  --blue: #4a9ff5;
+  --blue-dim: #0a1e3d;
+  --green: #4caf80;
+  --green-dim: #0d2e1a;
+  --red: #ef5350;
+  --red-dim: #2d1010;
+  --amber: #ffb300;
+  --amber-dim: #2d2000;
 }
 
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 10px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 10px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.2);
-}
-
-.modal {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: white;
-  border-radius: 16px;
-  outline: none;
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
   padding: 0;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
 }
 
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
+html,
+body,
+#root {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
 }
 
-@media (max-width: 640px) {
-  .modal {
-    width: 90%;
-    max-width: none;
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg2);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text3);
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 1
   }
+
+  50% {
+    opacity: .35
+  }
+}
+
+.live-dot {
+  animation: pulse 2s infinite;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px)
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0)
+  }
+}
+
+.toast-enter {
+  animation: slideUp .3s ease forwards;
 }
 
 .lobster-regular {
   font-family: "Lobster", sans-serif;
   font-weight: 400;
-  font-style: normal;
+}
+
+/* sidebar slide-in animation for mobile */
+@keyframes slideIn {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* nav link hover - applied via inline JS but also here for safety */
+.nav-link:hover {
+  background: var(--bg3) !important;
 }
